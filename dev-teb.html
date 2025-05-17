@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>TurboWarp Extension Builder with Arguments</title>
+<script src="https://unpkg.com/blockly/blockly.min.js"></script>
+<style>
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  #menuBar {
+    background: #333;
+    color: white;
+    padding: 0.5em 1em;
+    display: flex;
+    align-items: center;
+    gap: 1em;
+  }
+  #menuBar label {
+    font-size: 0.9rem;
+  }
+  #menuBar input {
+    font-size: 1rem;
+    padding: 0.2em 0.5em;
+    border-radius: 4px;
+    border: none;
+  }
+  #menuBar input#extensionIdInput {
+    width: 150px;
+  }
+  #menuBar input#extensionNameInput {
+    width: 200px;
+  }
+  #menuBar button {
+    margin-left: auto;
+    padding: 0.5em 1em;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 4px;
+    border: none;
+    background: #5c81a6;
+    color: white;
+  }
+  #main {
+    flex: 1;
+    display: flex;
+    height: calc(100% - 40px);
+  }
+  #blocklyDiv {
+    height: 100%;
+    width: 60%;
+  }
+  #output {
+    width: 40%;
+    height: 100%;
+    background: #f7f7f7;
+    border-left: 1px solid #ccc;
+    padding: 1em;
+    overflow: auto;
+    white-space: pre-wrap;
+    font-family: monospace;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div id="menuBar">
+  <label for="extensionIdInput">拡張機能ID</label>
+  <input id="extensionIdInput" type="text" value="myextension" />
+  <label for="extensionNameInput">拡張機能名</label>
+  <input id="extensionNameInput" type="text" value="MyExtension" />
+  <button id="generateBtn">コードを出力</button>
+</div>
+
+<div id="main">
+  <div id="blocklyDiv"></div>
+  <pre id="output"></pre>
+</div>
+
+<xml id="toolbox" style="display:none">
+  <category name="ブロック" colour="#5C81A6">
+    <block type="extension_block"></block>
+    <block type="argument_block"></block>
+    <block type="argument_value"></block>
+  </category>
+  <category name="基本ブロック" colour="#5CA65C">
+    <block type="text_print">
+      <value name="TEXT">
+        <shadow type="text">
+          <field name="TEXT">こんにちは</field>
+        </shadow>
+      </value>
+    </block>
+  </category>
+</xml>
+
+<script>
+// Blockly 初期化
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: document.getElementById('toolbox'),
+  scrollbars: true,
+  trashcan: true,
+});
+
+// ブロック定義
+Blockly.defineBlocksWithJsonArray([
+  {
+    "type": "extension_block",
+    "message0": "ブロックID %1 表示名 %2",
+    "args0": [
+      { "type": "field_input", "name": "BLOCK_ID", "text": "say_hello" },
+      { "type": "field_input", "name": "BLOCK_TEXT", "text": "こんにちはと言う" }
+    ],
+    "message1": "引数 %1",
+    "args1": [
+      { "type": "input_statement", "name": "ARGUMENTS" }
+    ],
+    "message2": "処理 %1",
+    "args2": [
+      { "type": "input_statement", "name": "DO" }
+    ],
+    "previousStatement": null,
+    "nextStatement": null,
+    "colour": 330,
+    "tooltip": "拡張機能のブロックを作ります。引数を複数持てます"
+  },
+
+  {
+    "type": "argument_block",
+    "message0": "引数名 %1 種類 %2",
+    "args0": [
+      { "type": "field_input", "name": "ARG_NAME", "text": "count" },
+      { "type": "field_dropdown", "name": "ARG_TYPE", "options": [
+        ["数値", "number"],
+        ["文字列", "string"],
+        ["ブール値", "boolean"]
+      ]}
+    ],
+    "previousStatement": null,
+    "nextStatement": null,
+    "colour": 330,
+    "tooltip": "拡張機能の引数を定義します"
+  },
+
+  {
+    "type": "argument_value",
+    "message0": "引数 %1 の値を取得",
+    "args0": [
+      {
+        "type": "field_input",
+        "name": "ARG_NAME",
+        "text": "count"
+      }
+    ],
+    "output": null,
+    "colour": 330,
+    "tooltip": "引数の値を取得します"
+  }
+]);
+
+// text_print のコード生成
+Blockly.JavaScript['text_print'] = function(block) {
+  const msg = Blockly.JavaScript.valueToCode(block, 'TEXT', Blockly.JavaScript.ORDER_NONE) || '""';
+  return `console.log(${msg});\n`;
+};
+
+// argument_value のコード生成（変数オブジェクトから取得）
+Blockly.JavaScript['argument_value'] = function(block) {
+  const argName = block.getFieldValue('ARG_NAME');
+  return [`args.${argName}`, Blockly.JavaScript.ORDER_MEMBER];
+};
+
+// コード生成関数
+function generateCode() {
+  Blockly.JavaScript.init(workspace);
+
+  const extensionId = document.getElementById("extensionIdInput").value.trim() || "myextension";
+  const extensionName = document.getElementById("extensionNameInput").value.trim() || "MyExtension";
+
+  const blocks = workspace.getAllBlocks(false);
+  const blockDefs = [];
+  const funcDefs = [];
+
+  for (const block of blocks) {
+    if (block.type === "extension_block") {
+      const blockId = block.getFieldValue("BLOCK_ID") || "unnamed_block";
+      const blockText = block.getFieldValue("BLOCK_TEXT") || "ブロック";
+
+      // 引数ブロックを取得
+      let args = [];
+      let argBlock = block.getInputTargetBlock("ARGUMENTS");
+      while (argBlock) {
+        args.push({
+          name: argBlock.getFieldValue("ARG_NAME"),
+          type: argBlock.getFieldValue("ARG_TYPE"),
+        });
+        argBlock = argBlock.getNextBlock();
+      }
+
+      // DO内の処理ブロックをコード生成
+      const statementsDo = Blockly.JavaScript.statementToCode(block, "DO");
+
+      // ブロック定義コード
+      blockDefs.push(`{
+  opcode: "${blockId}",
+  blockType: Scratch.BlockType.COMMAND,
+  text: \`${blockText}\`,
+  arguments: {
+    ${args.map(a => `${a.name}: { type: Scratch.ArgumentType.${a.type.toUpperCase()} }`).join(",\n    ")}
+  },
+  func: "${blockId}"
+}`);
+
+      // 関数本体コード（argsオブジェクトを受け取る）
+      funcDefs.push(`${blockId}(args) {
+${statementsDo}
+}`);
+    }
+  }
+
+  const fullCode = `(function(Scratch){
+class ${extensionName} {
+  getInfo() {
+    return {
+      id: "${extensionId.toLowerCase()}",
+      name: "${extensionName}",
+      blocks: [
+        ${blockDefs.join(",\n")}
+      ]
+    };
+  }
+  ${funcDefs.join(",\n")}
+}
+Scratch.extensions.register(new ${extensionName}());
+})(Scratch);`;
+
+  document.getElementById("output").textContent = fullCode.trim();
+}
+
+document.getElementById("generateBtn").addEventListener("click", generateCode);
+
+</script>
+
+</body>
+</html>
